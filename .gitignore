@@ -47,3 +47,9 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+
+# SMW files - make sure no data goes up to GitHub
+*.csv
+*.Rdata
+*.dat

@@ -1,0 +1,357 @@
+---
+title: "DemeRelate"
+author: "Phil Morin"
+date: "6/8/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DemeRelate
+Package: Demerelate
+Version: 0.9-3
+Date: 2017-03-02
+Title: Functions to Calculate Relatedness on Diploid Genetic Data
+
+
+```{r}
+rm(list = ls())
+library(Demerelate)
+library(strataG)
+library(tidyverse)
+# library(hablar)
+# x <- installed.packages(); x[ is.na(x[,"Priority"]), c("Package", "Version")] # for all packages
+DemeRelate_v<-packageVersion("Demerelate")
+strataGv<-packageVersion("strataG")
+
+```
+
+## Import data
+
+Example input. Every dataframe in Demerelate should be organized in this way.
+
+Sample-ID	Population	locus.1.a	locus.1.b	locus.2.a	locus.2.b	...
+Ind.Norway.01	Norway	001	002	001	002	...
+Ind.Norway.02	Norway	001	003	002	005	...
+
+load and format data from csv files for genotypes and stratification schemes (for gtypes object used by strataG package), and remove monomorphic loci for specified strata.
+```{r pressure, echo=FALSE}
+stratum <- "Wcoast4" #corrected to reflect AK_STRATA_3 and Wcoast4_num (several samples removed compared to Num_AK3_WC4)
+title <- "DemeRelate"
+#dir.create(paste(title,"_",stratum, sep = ""))
+
+# read genotypes data file (diploid, codominant); in directory above current directory
+# Format = 1st column = labid, 2 columns per locus
+gdata <- read.csv("../SNP151-microhaplo_QA_292_loci_split_final_genotable.csv", header = TRUE) 
+#sample id column = 'labid', missing data as NA, 00, 000, -999
+
+####################################################################
+# Remove loci 
+## Rem_loc <- read.csv("Final_dbRDA_Candidates_outer.csv") # this has each locus listed as loc.1, loc.2 for the 2 columns (e.g., Loc_10.1, Loc_10.2)
+## rll <- as.vector(t(Rem_loc))
+## gdata <- gdata[ , !(names(gdata) %in% rll)]
+
+####################################################################
+
+# read stratification file (includes lat/lon coordinates)
+# in directory above current directory
+# required columns for labid, Latitude, Longitude. After that, each column is a stratification scheme with 
+#  strata names for each sample in the strata.
+coord <- read.csv("../Q_Ppho_samples_strata_270618.csv", header = TRUE, na.strings=c("","NA"))
+# change labid column header name
+colnames(coord)[colnames(coord) == "LABID"] <- "labid"
+
+# combine data with coordinates (files can be different lengths)
+# select the specified stratum along with labid, Latitude and Longitude from the strata file
+strata.df.names <- c("labid", "Latitude", "Longitude", stratum)
+coord.strat <- coord[,colnames(coord) %in% strata.df.names]
+# then merge dataframes based on "labid" being a column name in both dataframes
+data <- merge(coord.strat,gdata)
+# remove sample data if not included in the specified strata
+data2 <- data %>% drop_na(stratum)
+## Note: Using an external vector in selections is ambiguous.
+## ℹ Use `all_of(stratum)` instead of `stratum` to silence this message.
+## ℹ See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+
+# remove sample data if it doesn't have lat/lon
+data2 <- data2 %>% drop_na(Latitude)
+# Remove monomorphic loci then ane write a file of monomorphic loci for this stratification scheme.
+other<-data2 %>% dplyr::select(labid, Latitude, Longitude) #create dataframe to add Lat/Lon to gtypes object (labid, Latitude, Longitude)
+g <- df2gtypes(data2, #this creates a df with 2 columns for id and hap
+               ploidy = 2,
+               id.col = 1,
+               strata.col = 4,
+               loc.col = 5,
+               other = other,
+               description = title)
+alleleNum<-numAlleles(g)
+row.names(alleleNum) <- alleleNum$locus
+# not.mono <- names(alleleNum)[alleleNum > 1]
+not.mono <- alleleNum$locus[alleleNum$num.alleles > 1]
+not.mono.g <- g[, not.mono, ]
+not.mono.df <- as.data.frame(not.mono.g)
+not.mono.df$labid<-not.mono.df$id
+not.mono.df$id<-NULL
+# Add the lat/lon data back to the dataframe
+data3<-merge(not.mono.df,other)
+# re-order the dataframe to put Lat/Lon columns after labid's
+latlon <- c("labid", "Latitude", "Longitude")
+data3 <- data3[, c(latlon, setdiff(names(data3), latlon))]
+data3 <- data3 %>% arrange(stratum, labid) # sort by strata column (ascending)
+
+# For DemeRelate, remove lat/lon columns
+data4 <- data3[,-c(2:3)]
+
+# remove underscores from strata names
+data4$stratum <- gsub("[_]", "", data4$stratum)
+# Remove underscores from column heading names
+names(data4) <- gsub( "_",  "", names(data4), fixed = TRUE)
+
+# Loc_131 has 10 nucleotide sites in it, so it is too long to be converted to an integer
+# (all of the genotypes become "NA"). 4 of the nucleotides in the middle are invariant
+# so it can be truncated
+data4$Loc131.1 <-gsub("AAAT","", data4$Loc131.1)
+data4$Loc131.2 <-gsub("AAAT","", data4$Loc131.2)
+
+# save list of monomorphic loci to a .csv file
+mono<-subset(alleleNum,num.alleles < 2)
+# monoloc<-names(mono) [which(mono==TRUE)]
+write.csv(mono, paste0(stratum,"_monomorphic_loci.csv"))
+cat("there were", length(mono), "monomorphic loci, saved to file:", paste0(stratum,"_monomorphic_loci.csv"))
+
+#save summary of data (after excluding monomorphic loci)
+############ This is not working with strataG v2.4.905 (April 2020)
+data_sum <- summary(not.mono.g)
+# strata.df <- as.data.frame(data_sum$strata.smry)
+# loc.df <- as.data.frame(data_sum$locus.smry)
+# samp.df <- as.data.frame(data_sum$sample.smry)
+# write.csv(strata.df, paste0(title,"_",stratum,"_data_sum.csv"))
+# write.csv(loc.df, paste0(title,"_",stratum,"_loc_sum.csv"))
+# write.csv(samp.df, paste0(title,"_",stratum,"_sample_sum.csv"))
+
+# paste("number of individuals = ", data_sum$num.ind)
+# paste("number of loci = ", data_sum$num.loc)
+
+# set the modified data file as the default database in R search path
+# attach(data3) 
+
+data4[1:10,1:10]
+```
+## convert data from character to number
+First column contains sample IDs (mode=character), which must be unique. However, no proofreading is implemented yet, but double named individuals may lead to errors or strange results. Column two contains population information (mode=factor). Pairwise relatedness is only calculated within populations. If you want to compare pairwise individual comparisons of several populations you need to build a new fictive population. You should do that with caution, since hidden population structures may produce strange results. Column three and four containing two alleles of a diploid marker for the sample defined in column one. Each marker should be appended in pairwise columns from then on. Allele size should be sorted in columns with the small allele in the odd numbered column and the bigger in even numbered column for convenience. However, Demerelate will take care of not sorted allele sizes and handle it correctly.
+```{r}
+# Convert SNP/microhaplotype genotypes from text to numbers using simple find/replace
+# for G=1, A=2, T=3, C=4.
+
+# remove ID and population columns
+gdata_ID <- as.character(data4[,1])
+gdata_pop <-as.factor(data4[,2])
+gdata1 <- data4[,3:ncol(data4)]
+# gdata_ID_pop <- (data4[,1:2])
+
+gdata1 <- gdata1 %>% mutate_all(str_replace_all, "G","1")
+gdata1 <- gdata1 %>% mutate_all(str_replace_all, "A","2")
+gdata1 <- gdata1 %>% mutate_all(str_replace_all, "T","3")
+gdata1 <- gdata1 %>% mutate_all(str_replace_all, "C","4")
+gdata1 <- gdata1 %>% mutate_all(str_replace_all, "NA","0") # this shouldn't be necessary, but trying to eliminate errors
+gdata1 <- gdata1 %>% mutate_all(str_replace_all, " ","0") # this shouldn't be necessary, but trying to eliminate errors
+# convert characters to integer
+gdata1 <- gdata1 %>% mutate_if(is.character, as.integer)
+gdata2 <- cbind(gdata_ID,gdata_pop,gdata1)
+# gdata2 <- cbind(gdata_ID_pop,gdata1)
+gdata2$gdata_ID <- as.character(gdata2$gdata_ID)
+
+write_csv(gdata2, col_names = TRUE, "gdata_integer.csv")
+
+
+
+gdata2[1:10,1:10]
+```
+
+
+## Map the data points
+```{r echo=FALSE, fig.height=8, fig.width=8}
+library(swfscMisc)
+pdf(file=paste0(title,"_",stratum,"_sample_map.pdf"))
+
+# modify the function swfscMisc::sample.map to change the background land color
+# change fill = TRUE, col = "wheat3" to fill = TRUE, col = "gray90"
+sample.map <- function (lat, lon, lat.range = NULL, lon.range = NULL, main = NULL, 
+                        pch = 19, pt.cex = 1, col = "black", bg = col, n = 5, lon.n = n, 
+                        lat.n = n) 
+{
+  if (is.null(lon.range)) 
+    lon.range <- range(lon, na.rm = TRUE)
+  if (is.null(lat.range)) 
+    lat.range <- range(lat, na.rm = TRUE)
+  pacific.cent <- lon.range[1] > lon.range[2]
+  if (pacific.cent) {
+    lon <- ifelse(lon < 0, 360 + lon, lon)
+    lon.range <- ifelse(lon.range < 0, 360 + lon.range, lon.range)
+  }
+  has.loc <- !is.na(lon) & !is.na(lat)
+  in.lon.range <- lon >= min(lon.range) & lon <= max(lon.range)
+  in.lat.range <- lat >= min(lat.range) & lat <= max(lat.range)
+  to.plot <- has.loc & in.lon.range & in.lat.range
+  if (!is.null(main)) 
+    main <- paste(main, " (n = ", sum(to.plot), ")", sep = "")
+  if (length(pch) == length(lon)) 
+    pch <- pch[to.plot]
+  if (length(pt.cex) == length(lon)) 
+    pt.cex <- pt.cex[to.plot]
+  if (length(col) == length(lon)) 
+    col <- col[to.plot]
+  if (length(bg) == length(lon)) 
+    bg <- bg[to.plot]
+  op <- graphics::par(mar = c(3, 5, ifelse(is.null(main), 3, 
+                                           5), 5) + 0.1, oma = c(1, 1, 1, 1))
+  if (pacific.cent) {
+    maps::map("mapdata::world2Hires", xlim = lon.range, ylim = lat.range)
+  }
+  else {
+    maps::map("mapdata::worldHires", fill = TRUE, col = "gray100", 
+              xlim = lon.range, ylim = lat.range)
+  }
+  graphics::points(lon[to.plot], lat[to.plot], pch = pch, cex = pt.cex, 
+                   col = col, bg = bg)
+  lat.lon.axes(n = n)
+  if (!is.null(main)) 
+    graphics::mtext(main, line = 3, cex = 1.5)
+  graphics::box(lwd = 2)
+  invisible(op)
+}
+
+#add SNP and strata data
+
+#pop_number <- #list of numbers, 1 to the total number of populations in the strata
+  # build a color list for the number of populations in this stratification scheme
+
+# add a column for 360° mapping
+# Lon360 <- ifelse(data3$Longitude < 0, 360 + data3$Longitude, data3$Longitude)
+# data3_Lon360 <- cbind(data3, Lon360)
+lat_min <- min(data3$Latitude)
+lat_max <- max(data3$Latitude)
+lon_min <- min(data3$Longitude)
+lon_max <- max(data3$Longitude)
+    
+lat.range <- c(lat_min - 1.5, lat_max + 1.5)
+lon.range <- c(lon_min - 1.5, lon_max + 1.5)
+n<-5
+
+lat <- data3$Latitude
+lon <- data3$Longitude
+
+# set pop colors and symbols
+Map_Key.col <- c(
+  # ColorBrewer.org diverging 11-class RdYlBu (reversed); plus 2.
+  "BC" = "black",
+  "W_Vancouver_Is" = "#7F63C6", #4D3194", #313695"
+  "Strait_of_Georgia" = "gray60",
+  "San_Juan_Is" = "#4575b4", #74add1,
+  "Puget_Sound" = "#abd9e9",
+  "Neah_Bay" = "seagreen2", # cyan3
+  "Spike_Rock" = "#e0f3f8",
+  "ORWA_Coast" = "#ffffbf",
+  "SOR" = "#fee090",
+  "NoCal" = "#fdae61",
+  "SF_RR" = "#8c510a",
+  "Monterey_Bay" = "#f46d43", # #d73027
+  "Morro_Bay" = "#d73027") #a50026
+
+
+Map_Key.pch <- c(
+  "BC" = 22,
+  "W_Vancouver_Is" = 22,
+  "Strait_of_Georgia" = 22,
+  "San_Juan_Is" = 22,
+  "Puget_Sound" = 22,
+  "Neah_Bay" = 22,
+  "Spike_Rock" = 22,
+  "ORWA_Coast" = 22,
+  "SOR" = 22,
+  "NoCal" = 22,
+  "SF_RR" = 22,
+  "Monterey_Bay" = 22,
+  "Morro_Bay" = 22)
+
+#create named vectors where the names match the values in the "Map_Key" column of 
+#the input data file, and each type is assigned a color and shape.
+m<-sample.map(lat, lon, lat.range, lon.range, n = n, 
+            bg = Map_Key.col[data3$stratum], pch = Map_Key.pch[data3$stratum])
+
+# and legend
+legend("bottomleft", 
+       legend = names(Map_Key.col),
+       pch = Map_Key.pch,
+       pt.bg = Map_Key.col,
+       pt.lwd = 0, # line around point. 0=no line
+       cex = 1.0, #size of legend text
+       pt.cex = 1.5,
+       bty = "n" #"n" = no border
+)
+dev.off()
+
+
+
+```
+
+## Loci.test
+run Loci.test to determine number of loci needed for estimating relatedness
+Some estimators are not defined for bi-allelics, ritland and queller and goodknights rxy will lead to errors if used with SNP data.
+```{r}
+# test data set; bt=number of bootstrap replicates (set to 1000 after testing)
+data("demerelpop")
+demerelpop[1:10,1:10]
+demerelpop.df <- demerelpop
+Loci.test(demerelpop.df, bt=10, ref.pop=NA, object=TRUE, value="rxy", file.output=TRUE)
+
+# empirical data set # increase bootstrap (bt) to 1000 after testing; may take a very long time (took ~10-15 min for 10reps with 281 samples, 291 loci)
+Loci.test(gdata2, bt=100, ref.pop = NA, object=TRUE, value = "wang", file.output=TRUE)
+```
+
+
+## DemeRelate
+Head function of Demerelate. This function should be called if any estimation of relatedness is intended. Additionally, some F-statistics can be calculated. Default parameters are set for convenient usage. Only an input dataframe containing allelic information is necessary. Geographical distances, reference populations or alterations on statistics can be set by adapting parameters.
+
+Usage
+     Demerelate(inputdata, tab.dist = "NA", ref.pop = "NA", 
+                object = FALSE, value = "Mxy", Fis = FALSE,
+                file.output = FALSE, p.correct = FALSE,
+                iteration = 1000, pairs = 1000, 
+                dis.data = "relative", NA.rm = TRUE,
+                genotype.ref = TRUE)
+                
+B_{xy} (number of alleles shared) as described in Li and Horvitz 1953 (Bxy).
+S_{xy} (number of alleles shared) as described in Lynch 1988 (Sxy).
+M_{xy} (genotype sharing) as described in Blouin et al. 1996 (Mxy).
+Li is based on the equations from Li et al. 1993 (Li).
+The estimator r_{xy} based on Queller and Goodnight 1989 adapted to pairwise comparisons as described in Oliehoek et al. 2006 (rxy).
+l_{xy} is calculated based on Lynch and Ritland 1999 (lxy, lxy.w).
+The estimator loiselle is based on Loiselle et al. 1995 (loiselle).
+The estimator wang.fin is based on Wang 2002 for a finite sample (wang.fin, wang.fin.w).
+The estimator wang is based on Wang 2002 including bias correction for sample size (wang, wang.w).
+The estimator ritland is based on Ritland 1996 (ritland).
+The estimator morans.fin is based on Hardy and Vekemans 1999 ommiting correction for sample size (morans.fin).
+The estimator morans is based on Hardy and Vekemans 1999 with correction for sample size bias (morans.fin, morans.w).
+```{r echo=FALSE, fig.height=8, fig.width=8}
+# Demerelate(gdata2[,-c(39:40)], object=TRUE, value = "Mxy", file.output=TRUE, NA.rm = F, pairs=10) (took ~2-3min for 10reps)
+# allele sharing methods (value = ): Can be set as "Bxy", "Sxy", "Mxy", "Li", "lxy", "rxy", "loiselle", "wang.fin", "wang", "ritland", "morans.fin" or "morans" allele.sharing.
+# Some estimators are not defined for bi-allelics, ritland and queller and goodknights rxy will lead to errors here.
+D <- Demerelate(gdata2, tab.dist = "NA", ref.pop = NA, object = TRUE,
+           value = "morans.fin",  
+           Fis = FALSE,
+           file.output = TRUE,
+           p.correct = FALSE,
+           iteration = 1000,  # increase to 1000 after testing
+           pairs = 1000,      # increase to 1000 after testing
+           dis.data = "relative",
+           NA.rm = FALSE,
+           genotype.ref = TRUE)
+
+```
+  
+```{r cache=TRUE}
+save.image(file=paste0(title, "_", stratum, ".Rdata"))
+```
