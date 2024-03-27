@@ -2,9 +2,11 @@
 # Last modified 2 March 2020 by Haley Viehman
 
 # User definitions:
-dive.times = read.csv('C:/Users/haleyv/Desktop/glider tests/dive times.csv',stringsAsFactors=F,header=T) #  generate the data frame with the start and end dates & times of each dive
-  dive.times$start.time=as.POSIXct(dive.times$start.time,format='%m/%d/%Y %H:%M:%S',tz='GMT')
-  dive.times$end.time=as.POSIXct(dive.times$end.time,format='%m/%d/%Y %H:%M:%S',tz='GMT')
+# dive.times = read.csv('C:/Users/haleyv/Desktop/glider tests/dive times.csv',stringsAsFactors=F,header=T) #  generate the data frame with the start and end dates & times of each dive
+list.files()
+dive.times = read.csv('someeasyrmagic/dive times.csv',stringsAsFactors=F,header=T) #  generate the data frame with the start and end dates & times of each dive
+dive.times$start.time=as.POSIXct(dive.times$start.time,format='%m/%d/%Y %H:%M',tz='GMT')
+dive.times$end.time=as.POSIXct(dive.times$end.time,format='%m/%d/%Y %H:%M',tz='GMT')
 reg.class = 'Dive' # region class name to assign to the dive regions
 start.depth = -1 # starting depth for the regions
 end.depth = 1000 # ending depth for the regions (make sure it spans the water column)
