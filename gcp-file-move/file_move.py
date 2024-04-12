@@ -97,9 +97,12 @@ def move_blob(storage_client, bucket_name, blob_name, destination_bucket_name, d
     )
     
 def copy_blob(
-    storage_client, bucket_name, blob_name, destination_bucket_name, destination_blob_name,
+    source_bucket, blob_name, destination_bucket, destination_blob_name,
 ):
-    """Copies a blob from one bucket to another with a new name."""
+    """
+    Copies a blob from one bucket to another with a new name.
+    https://cloud.google.com/storage/docs/samples/storage-copy-file#storage_copy_file-python
+    """
     # bucket_name = "your-bucket-name"
     # blob_name = "your-object-name"
     # destination_bucket_name = "destination-bucket-name"
@@ -107,9 +110,9 @@ def copy_blob(
 
     # storage_client = storage.Client()
 
-    source_bucket = storage_client.bucket(bucket_name)
+    # source_bucket = storage_client.bucket(bucket_name)
     source_blob = source_bucket.blob(blob_name)
-    destination_bucket = storage_client.bucket(destination_bucket_name)
+    # destination_bucket = storage_client.bucket(destination_bucket_name)
 
     # Optional: set a generation-match precondition to avoid potential race conditions
     # and data corruptions. The request to copy is aborted if the object's
@@ -133,6 +136,38 @@ def copy_blob(
     #         destination_bucket.name,
     #     )
     # )
+    
+def copy_blob_if_new(
+    source_bucket, blob_name, destination_bucket, destination_blob_name
+):
+    """
+    Wrapper around copy_blob - 
+    only try to copy blob if destination blob does not already exist
+    """
+    # destination_bucket = storage_client.bucket(destination_bucket_name)
+    if destination_bucket.blob(destination_blob_name).exists():
+        return
+    else:
+        copy_blob(source_bucket, blob_name, 
+                  destination_bucket, destination_blob_name)
+        
+def copy_blob_client(
+    project_name, bucket_name, blob_name, destination_bucket_name, destination_blob_name,
+):
+    """
+    Copies a blob from one bucket to another with a new name.
+    https://cloud.google.com/storage/docs/samples/storage-copy-file#storage_copy_file-python
+    """
+    storage_client = storage.Client(project_name)
+
+    source_bucket = storage_client.bucket(bucket_name)
+    source_blob = source_bucket.blob(blob_name)
+    destination_bucket = storage_client.bucket(destination_bucket_name)
+    
+    blob_copy = source_bucket.copy_blob(
+        source_blob, destination_bucket, destination_blob_name
+        #if_generation_match=destination_generation_match_precondition,
+    )
     
 
 def move_blob_wrapper(file_old):
