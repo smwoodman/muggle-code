@@ -163,7 +163,7 @@ def copy_blob_client_ifnew(
     source_bucket = storage_client.bucket(bucket_name)
     source_blob = source_bucket.blob(blob_name)
     destination_bucket = storage_client.bucket(destination_bucket_name)
-    if destination_bucket.blob(destination_blob_name).exists():
+    if destination_bucket.blob(destination_blob_name).exists(storage.Client(project_name)):
         return
     else:
          blob_copy = source_bucket.copy_blob(
