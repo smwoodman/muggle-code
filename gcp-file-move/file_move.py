@@ -151,8 +151,8 @@ def copy_blob_if_new(
         copy_blob(source_bucket, blob_name, 
                   destination_bucket, destination_blob_name)
         
-def copy_blob_client(
-    project_name, bucket_name, blob_name, destination_bucket_name, destination_blob_name,
+def copy_blob_client_ifnew(
+    project_name, bucket_name, blob_name, destination_bucket_name, destination_blob_name
 ):
     """
     Copies a blob from one bucket to another with a new name.
@@ -163,11 +163,13 @@ def copy_blob_client(
     source_bucket = storage_client.bucket(bucket_name)
     source_blob = source_bucket.blob(blob_name)
     destination_bucket = storage_client.bucket(destination_bucket_name)
-    
-    blob_copy = source_bucket.copy_blob(
-        source_blob, destination_bucket, destination_blob_name
-        #if_generation_match=destination_generation_match_precondition,
-    )
+    if destination_bucket.blob(destination_blob_name).exists():
+        return
+    else:
+         blob_copy = source_bucket.copy_blob(
+            source_blob, destination_bucket, destination_blob_name
+            #if_generation_match=destination_generation_match_precondition,
+        )
     
 
 def move_blob_wrapper(file_old):
