@@ -38,8 +38,8 @@ def replace_path(file_src, file_substr, header_src, header_dest):
     """
     x = file_src
     x = x.replace(f"{header_src}", f"{header_dest}")
-    if (file_substr == "jpgorig-regions"):
-        x = x.replace("/shadowgraph/images", f"/{file_substr}")
+    if (file_substr == "orig-regions"):
+        x = x.replace("/shadowgraph/images", f"/images-{file_substr}")
     elif (file_substr == "/regions"):
         x = x.replace("/shadowgraph/images", f"{file_substr}")
     elif (file_substr == "-ffPCG" or file_substr == "-imgff"):
