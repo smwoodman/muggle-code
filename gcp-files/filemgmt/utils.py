@@ -40,9 +40,12 @@ def replace_path(file_src, file_substr, header_src, header_dest):
     x = x.replace(f"{header_src}", f"{header_dest}")
     if (file_substr == "jpgorig-regions"):
         x = x.replace("/shadowgraph/images", f"/{file_substr}")
-    else:
+    elif (file_substr == "/regions"):
+        x = x.replace("/shadowgraph/images", f"{file_substr}")
+    elif (file_substr == "-ffPCG" or file_substr == "-imgff"):
         x = x.replace("/shadowgraph/images", f"/images{file_substr}")
-
+    else:
+        raise Exception("The file substring (file_substr) is invalid")
     x = x.replace("/output", "")
 
     return x

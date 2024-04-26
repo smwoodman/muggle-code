@@ -9,7 +9,8 @@ dependencies:
   - pip:
       - google-cloud-storage
   
-# # To install in GCP Notebook: https://cloud.google.com/vertex-ai/docs/workbench/instances/add-environment
+# # To install in GCP Notebook: 
+# https://cloud.google.com/vertex-ai/docs/workbench/instances/add-environment
 # cd ~/muggle-code/gcp-files
 # conda env create -f environment.yml
 # conda activate muggle-gcp-files
